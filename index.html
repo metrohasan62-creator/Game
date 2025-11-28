@@ -1,96 +1,268 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="bn">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Simple Racing Game</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Car Passing Game — আপনার গাড়ি</title>
 <style>
-  body {
-    margin: 0;
-    background: #111;
-    overflow: hidden;
-    font-family: sans-serif;
-  }
-  #gameCanvas {
-    display: block;
-    margin: 0 auto;
-    background: #222;
-  }
-  .controls {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 20px;
-  }
-  button {
-    padding: 15px 25px;
-    background: #0a84ff;
-    border: none;
-    color: white;
-    font-size: 18px;
-    border-radius: 10px;
-  }
+  :root{--bg:#081226;--panel:rgba(0,0,0,0.6);--btn:#0a84ff}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui, 'Noto Sans Bengali', sans-serif;background:var(--bg);color:#fff;display:flex;align-items:center;justify-content:center;height:100vh}
+  #wrap{width:900px;max-width:98vw}
+  .ui{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+  .panel{background:var(--panel);padding:10px;border-radius:8px}
+  select,input[type=color]{padding:8px;border-radius:6px;border:1px solid #333;background:#0f1720;color:#fff}
+  button{background:var(--btn);border:none;padding:10px 14px;border-radius:8px;color:#fff;font-weight:600;cursor:pointer}
+  canvas{display:block;width:100%;height:auto;border-radius:8px;background:#123}
+  .controls{display:flex;gap:8px}
+  .legend{font-size:13px;color:#ddd}
+  .footer{margin-top:10px;color:#ccc;font-size:13px}
+  @media (max-width:760px){ #wrap{width:100%} .ui{flex-direction:column;align-items:stretch} }
 </style>
 </head>
 <body>
-<canvas id="gameCanvas" width="400" height="600"></canvas>
+<div id="wrap">
+  <div class="ui">
+    <div class="panel">
+      <div style="font-weight:700;margin-bottom:6px">গাড়ির কাস্টমাইজ</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label>স্টাইল:</label>
+        <select id="carStyle">
+          <option value="sedan">Sedan</option>
+          <option value="sports">Sports</option>
+          <option value="suv">SUV</option>
+        </select>
+        <label>রং:</label>
+        <input id="carColor" type="color" value="#f1c40f">
+      </div>
+    </div>
 
-<div class="controls">
-  <button id="leftBtn">⬅ Left</button>
-  <button id="rightBtn">Right ➡</button>
+    <div class="panel">
+      <div style="font-weight:700;margin-bottom:6px">রোড সিলেকশন</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="roadTheme">
+          <option value="city_night">City (Night)</option>
+          <option value="city_day">City (Day)</option>
+          <option value="desert">Desert</option>
+          <option value="snow">Snow</option>
+        </select>
+        <button id="startBtn">Start</button>
+        <button id="pauseBtn">Pause</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div style="font-weight:700">Info</div>
+      <div class="legend">Score: <strong id="score">0</strong></div>
+      <div class="legend">High: <strong id="high">0</strong></div>
+      <div class="legend">Lives: <strong id="lives">3</strong></div>
+    </div>
+
+    <div class="panel controls">
+      <button id="leftBtn">⬅ Left</button>
+      <button id="rightBtn">Right ➡</button>
+    </div>
+  </div>
+
+  <canvas id="scene" width="880" height="520"></canvas>
+  <div class="footer">কী-বোর্ড: ← →   টাচ: স্ক্রিন বাঁ/ডান অংশ ট্যাপ করে লেন বদলানো যাবে।</div>
 </div>
 
 <script>
-const canvas = document.getElementById('gameCanvas');
+const canvas = document.getElementById('scene');
 const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
 
-let carX = 200;
-let carY = 500;
-let speed = 2;
-let roadWidth = 200;
-let offset = 0;
+// UI
+const carStyleSel = document.getElementById('carStyle');
+const carColorInp = document.getElementById('carColor');
+const roadThemeSel = document.getElementById('roadTheme');
+const startBtn = document.getElementById('startBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const leftBtn = document.getElementById('leftBtn');
+const rightBtn = document.getElementById('rightBtn');
+const scoreEl = document.getElementById('score');
+const highEl = document.getElementById('high');
+const livesEl = document.getElementById('lives');
 
-function drawRoad() {
-  ctx.fillStyle = '#444';
-  ctx.fillRect((canvas.width-roadWidth)/2, 0, roadWidth, canvas.height);
+let running = false, paused = false;
+let score = 0, high = parseInt(localStorage.getItem('car_pass_high')||0), lives=3;
+highEl.innerText = high;
 
-  ctx.strokeStyle = 'white';
-  ctx.setLineDash([20, 15]);
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(canvas.width/2, -canvas.height + offset);
-  ctx.lineTo(canvas.width/2, canvas.height*2 + offset);
-  ctx.stroke();
+// lanes: 3 lanes centered in road
+const road = {x:120, w: W-240};
+const lanes = [ road.x + road.w*0.2, road.x + road.w*0.5, road.x + road.w*0.8 ];
+let player = {lane:1, x: lanes[1], y: H-90, w:48, h:28, color: carColorInp.value, style: carStyleSel.value };
+
+let obstacles = []; // other cars
+let lastSpawn = 0; let spawnInterval = 1200; // ms
+let speed = 2.2; // base speed
+let offset = 0; // road offset for moving effect
+
+// road theme visuals
+function drawBackground(){
+  const theme = roadThemeSel.value;
+  if(theme==='city_night'){ ctx.fillStyle='#0b1220'; ctx.fillRect(0,0,W,H); }
+  else if(theme==='city_day'){ ctx.fillStyle='#9fd3ff'; ctx.fillRect(0,0,W,H); }
+  else if(theme==='desert'){ ctx.fillStyle='#f4d6a0'; ctx.fillRect(0,0,W,H); }
+  else if(theme==='snow'){ ctx.fillStyle='#dceeff'; ctx.fillRect(0,0,W,H); }
 }
 
-function drawCar() {
-  ctx.fillStyle = 'yellow';
-  ctx.beginPath();
-  ctx.arc(carX, carY, 15, 0, Math.PI * 2);
-  ctx.fill();
+function drawBuildings(){
+  const theme = roadThemeSel.value;
+  const leftX = 20; const rightX = W-120;
+  // left buildings
+  for(let i=0;i<6;i++){
+    const bw = 80; const bh = 40 + (i%3)*30;
+    const by = i*80 + (offset%80);
+    ctx.fillStyle = (theme==='city_day')? '#8fb3ff' : '#2b2f40';
+    ctx.fillRect(leftX, by-120, bw, bh);
+    // windows
+    ctx.fillStyle = '#ffd';
+    for(let r=0;r<Math.floor(bh/14);r++){ ctx.fillRect(leftX+8, by-120 + 8 + r*14, 10, 8); }
+  }
+  // right buildings
+  for(let i=0;i<6;i++){
+    const bw = 80; const bh = 30 + ((i+1)%4)*20;
+    const by = i*78 + (offset%78);
+    ctx.fillStyle = (theme==='desert')? '#cfa76a' : '#313642';
+    ctx.fillRect(rightX, by-140, bw, bh);
+    ctx.fillStyle = '#ffd';
+    for(let r=0;r<Math.floor(bh/14);r++){ ctx.fillRect(rightX+8, by-140 + 6 + r*14, 10, 8); }
+  }
 }
 
-function update() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  offset += speed;
-  if(offset > 40) offset = 0;
-
-  drawRoad();
-  drawCar();
-
-  requestAnimationFrame(update);
+function drawRoad(){
+  // road body
+  ctx.fillStyle = '#333'; ctx.fillRect(road.x,0,road.w,H);
+  // side stripes
+  ctx.fillStyle = '#111'; ctx.fillRect(road.x-8,0,8,H); ctx.fillRect(road.x+road.w,0,8,H);
+  // lane center dashed
+  ctx.strokeStyle = '#eee'; ctx.lineWidth = 4; ctx.setLineDash([24,18]); ctx.beginPath(); ctx.moveTo(W/2, -H + (offset%100)); ctx.lineTo(W/2, H*2); ctx.stroke(); ctx.setLineDash([]);
 }
-update();
 
-document.getElementById("leftBtn").onclick = ()=>{
-  carX -= 15;
-};
-document.getElementById("rightBtn").onclick = ()=>{
-  carX += 15;
-};
+function drawPlayer(){
+  const x = lanes[player.lane];
+  // car body depends on style
+  const color = player.color;
+  if(player.style==='sedan') drawCarSedan(x, player.y, color);
+  else if(player.style==='sports') drawCarSports(x, player.y, color);
+  else drawCarSUV(x, player.y, color);
+}
+
+function drawCarSedan(cx, cy, color){ ctx.save(); ctx.translate(cx, cy);
+  // body
+  roundRect(ctx, -24, -12, 48, 24, 6); ctx.fillStyle=color; ctx.fill();
+  // roof
+  roundRect(ctx, -10, -16, 20, 14,4); ctx.fillStyle=shade(color,-12); ctx.fill();
+  // wheels
+  ctx.fillStyle='#111'; ctx.fillRect(-18,10,12,5); ctx.fillRect(6,10,12,5);
+  ctx.restore(); }
+function drawCarSports(cx, cy, color){ ctx.save(); ctx.translate(cx, cy);
+  roundRect(ctx, -26, -10, 52, 20, 8); ctx.fillStyle=color; ctx.fill();
+  // spoiler
+  ctx.fillStyle=shade(color,-18); ctx.fillRect(12,-14,14,4);
+  ctx.fillStyle='#111'; ctx.fillRect(-18,10,12,5); ctx.fillRect(6,10,12,5);
+  ctx.restore(); }
+function drawCarSUV(cx, cy, color){ ctx.save(); ctx.translate(cx, cy);
+  roundRect(ctx, -26, -14, 52, 28, 6); ctx.fillStyle=color; ctx.fill();
+  roundRect(ctx, -12, -24, 26, 12,4); ctx.fillStyle=shade(color,-10); ctx.fill();
+  ctx.fillStyle='#111'; ctx.fillRect(-18,14,12,6); ctx.fillRect(6,14,12,6);
+  ctx.restore(); }
+
+function shade(hex, percent){ // simple shade: hex like #rrggbb, percent negative darker
+  const f = parseInt(hex.slice(1),16), t = percent<0?0:255, p = Math.abs(percent)/100;
+  const R = Math.round((t - (f>>16))*p) + (f>>16);
+  const G = Math.round((t - (f>>8 & 0x00FF))*p) + (f>>8 & 0x00FF);
+  const B = Math.round((t - (f & 0x0000FF))*p) + (f & 0x0000FF);
+  return '#'+(0x1000000 + (R<<16) + (G<<8) + B).toString(16).slice(1);
+}
+
+function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+function spawnOtherCar(){
+  const lane = Math.floor(Math.random()*3); const x = lanes[lane];
+  const w = 44; const h = 26; const color = ['#e74c3c','#3498db','#f39c12','#2ecc71'][Math.floor(Math.random()*4)];
+  const speedFactor = 1 + Math.random()*0.8;
+  obstacles.push({lane:x,y:-50,w,h,color,speed:speed*speedFactor, laneIndex:lane});
+}
+
+function drawObstacles(){
+  for(let o of obstacles){ drawOtherCar(o); o.y += o.speed; }
+}
+function drawOtherCar(o){
+  ctx.save(); ctx.translate(o.lane, o.y);
+  roundRect(ctx, -o.w/2, -o.h/2, o.w, o.h, 5); ctx.fillStyle=o.color; ctx.fill();
+  ctx.fillStyle='#111'; ctx.fillRect(-o.w/2+6, o.h/2 -6, 12,4); ctx.fillRect(o.w/2-18, o.h/2-6, 12,4);
+  ctx.restore();
+}
+
+function detectCollisions(){
+  const px = lanes[player.lane]; const py = player.y;
+  for(let i=obstacles.length-1;i>=0;i--){ const o = obstacles[i];
+    const dx = Math.abs(o.lane - px);
+    const dy = Math.abs(o.y - py);
+    if(dx < 36 && dy < 28){ // collision!
+      obstacles.splice(i,1);
+      lives -= 1; livesEl.innerText = lives; beep(180,0.12);
+      if(lives<=0){ gameOver(); }
+    }
+  }
+}
+
+/* ===== audio beep ===== */
+let audioCtx=null; function beep(freq=440,d=0.06){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type='sine'; o.frequency.value = freq; o.connect(g); g.connect(audioCtx.destination); g.gain.value=0.0001; g.gain.exponentialRampToValueAtTime(0.08,audioCtx.currentTime+0.01); o.start(); g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+d); setTimeout(()=>o.stop(), d*1000+50); }
+
+/* ===== game loop ===== */
+let lastT = performance.now();
+function loop(t){ if(!running || paused) return; const dt = t - lastT; lastT = t; offset += speed; if(offset>100) offset=0;
+  // clear
+  ctx.clearRect(0,0,W,H);
+  drawBackground(); drawBuildings(); drawRoad(); drawObstacles(); drawPlayer();
+  // update spawn
+  if(t - lastSpawn > spawnInterval){ spawnOtherCar(); lastSpawn = t; }
+  // remove off-screen obstacles
+  for(let i=obstacles.length-1;i>=0;i--) if(obstacles[i].y > H+80) obstacles.splice(i,1);
+  // collisions
+  detectCollisions();
+  // scoring
+  score += 1; scoreEl.innerText = score;
+  if(score % 1000 === 0){ speed += 0.4; spawnInterval = Math.max(600, spawnInterval - 80); }
+  requestAnimationFrame(loop);
+}
+
+function startGame(){ // reset
+  running = true; paused = false; score=0; lives=3; speed = 2.2; obstacles=[]; lastSpawn = performance.now(); spawnInterval = 1200; player.lane = 1; player.color = carColorInp.value; player.style = carStyleSel.value; scoreEl.innerText=score; livesEl.innerText=lives;
+  startBtn.innerText = 'Restart';
+  requestAnimationFrame(loop);
+}
+function pauseGame(){ paused = !paused; pauseBtn.innerText = paused? 'Resume' : 'Pause'; if(!paused){ lastT = performance.now(); requestAnimationFrame(loop); } }
+function gameOver(){ running=false; beep(120,0.2); if(score > high){ high = score; localStorage.setItem('car_pass_high', high); highEl.innerText = high; alert('Game Over! নতুন হাইস্কোর: '+score); } else alert('Game Over! স্কোর: '+score); }
+
+// UI events
+startBtn.addEventListener('click', ()=>{ startGame(); });
+pauseBtn.addEventListener('click', ()=>{ pauseGame(); });
+leftBtn.addEventListener('click', ()=>{ if(!running) return; player.lane = Math.max(0, player.lane-1); beep(700,0.04); });
+rightBtn.addEventListener('click', ()=>{ if(!running) return; player.lane = Math.min(2, player.lane+1); beep(900,0.04); });
+carColorInp.addEventListener('change', e=>{ player.color = e.target.value; });
+carStyleSel.addEventListener('change', e=>{ player.style = e.target.value; });
+roadThemeSel.addEventListener('change', ()=>{});
+
+// keyboard
+window.addEventListener('keydown', e=>{ if(e.key==='ArrowLeft') leftBtn.click(); if(e.key==='ArrowRight') rightBtn.click(); if(e.key===' '){ if(!running) startBtn.click(); else pauseBtn.click(); } });
+
+// touch: split canvas left/right
+canvas.addEventListener('touchstart', e=>{ e.preventDefault(); const x = e.touches[0].clientX - canvas.getBoundingClientRect().left; if(x < canvas.width/2) leftBtn.click(); else rightBtn.click(); }, {passive:false});
+
+// simple autosave for settings
+function saveSettings(){ localStorage.setItem('car_color', carColorInp.value); localStorage.setItem('car_style', carStyleSel.value); localStorage.setItem('road_theme', roadThemeSel.value); }
+function loadSettings(){ const c = localStorage.getItem('car_color'); if(c) carColorInp.value=c; const s = localStorage.getItem('car_style'); if(s) carStyleSel.value=s; const r = localStorage.getItem('road_theme'); if(r) roadThemeSel.value=r; player.color = carColorInp.value; player.style = carStyleSel.value; }
+window.addEventListener('beforeunload', saveSettings);
+loadSettings();
+
+// initial draw
+ctx.clearRect(0,0,W,H); drawBackground(); drawBuildings(); drawRoad(); drawPlayer();
+
 </script>
 </body>
 </html>

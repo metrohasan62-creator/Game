@@ -1,276 +1,527 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="bn">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Ultimate Curvy Road Car Game</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>2D Shooter — Hard Bot (Local)</title>
 <style>
-/* ✔ নতুন ভার্সন – আরও সুন্দর, বাস্তবসম্মত, পেশাদার লুক */
-
-body {
-  margin: 0;
-  background: #111;
-  overflow: hidden;
-  font-family: Arial, sans-serif;
-}
-
-#gameCanvas {
-  display: block;
-  margin: 0 auto;
-  background: #222;
-}
-
-/* UI PANEL */
-#topPanel {
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 20px;
-  background: rgba(0,0,0,0.55);
-  padding: 10px 20px;
-  border-radius: 12px;
-  color: #fff;
-  font-size: 16px;
-}
-
-/* Steering Wheel */
-#steerWheel {
-  position: fixed;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 160px;
-  height: 160px;
-  background: radial-gradient(#444, #222);
-  border-radius: 50%;
-  border: 6px solid #555;
-  box-shadow: 0 0 20px #000 inset;
-  touch-action: none;
-}
-#wheelCenter {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%,-50%);
-  width: 50px;
-  height: 50px;
-  background: #666;
-  border-radius: 50%;
-  box-shadow: 0 0 12px #000 inset;
-}
-
-/* MENU */
-#menu {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.9);
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 20px;
-}
-#menu select, #menu button {
-  padding: 10px 20px;
-  font-size: 18px;
-  border-radius: 8px;
-  border: none;
-}
-
+  :root{
+    --bg:#071426; --panel:#0f1720; --accent:#38c172; --danger:#e84b4b;
+    --muted:#9aa6b2; --ui:#0d1b2a;
+  }
+  html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Bengali",Arial}
+  body{background:linear-gradient(180deg,var(--bg),#03101a);color:#e6eef6;overflow:hidden}
+  #game{display:block;width:100vw;height:100vh}
+  .overlay{
+    position:fixed;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;
+    pointer-events:none;
+  }
+  .panel{background:rgba(3,8,12,0.7);border:1px solid rgba(255,255,255,0.04);backdrop-filter:blur(4px);
+    padding:18px;border-radius:10px;pointer-events:auto;max-width:92vw;color:#d9eef8}
+  button.btn{background:linear-gradient(180deg,#1b6b4a,#0f5038);border:0;padding:10px 16px;border-radius:8px;color:white;font-weight:600;cursor:pointer}
+  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+  #hud{position:fixed;left:12px;top:12px;z-index:40}
+  #hud div{font-size:14px;margin-bottom:6px}
+  #controls{position:fixed;left:0;right:0;bottom:10px;display:flex;justify-content:space-between;padding:0 12px;z-index:30;pointer-events:none}
+  .control-block{display:flex;gap:8px;pointer-events:auto}
+  .big-btn{padding:12px 16px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.03);min-width:70px;text-align:center;font-weight:700}
+  .small-btn{padding:10px;border-radius:8px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.03)}
+  #centerMsg{position:fixed;left:50%;transform:translateX(-50%);top:8px;font-size:13px;color:var(--muted)}
+  canvas{display:block}
+  footer{position:fixed;right:10px;bottom:10px;font-size:12px;color:rgba(255,255,255,0.6)}
+  @media (max-width:700px){
+    .panel{max-width:96vw}
+    .big-btn{min-width:60px;padding:10px}
+  }
 </style>
 </head>
 <body>
+<canvas id="game"></canvas>
 
-<canvas id="gameCanvas" width="420" height="780"></canvas>
+<div id="hud">
+  <div id="playerStats">You — HP: <span id="pHP">5</span> | Score: <span id="pScore">0</span></div>
+  <div id="botStats">Bot — HP: <span id="bHP">5</span> | Score: <span id="bScore">0</span></div>
+</div>
+<div id="centerMsg">Touch buttons (নিচে) বা কীবোর্ড ব্যবহার করো — A/D or ◀/▶ to move, K or / to shoot</div>
 
-<div id="menu">
-  <h1>🚗 Ultimate Curvy Road Game</h1>
-
-  <label>গাড়ির রং নির্বাচন:</label>
-  <select id="carColor">
-    <option value="#ff2a2a">Red</option>
-    <option value="#00d1ff">Cyan</option>
-    <option value="#ffd500">Yellow</option>
-    <option value="#00ff44">Lime</option>
-  </select>
-
-  <label>রোড থিম:</label>
-  <select id="roadTheme">
-    <option value="day">Day City</option>
-    <option value="night">Night City</option>
-  </select>
-
-  <button id="startBtn">Start Game</button>
+<!-- Controls -->
+<div id="controls">
+  <div class="control-block">
+    <div id="leftBtn" class="big-btn">◀</div>
+    <div id="fireBtn" class="big-btn">FIRE</div>
+    <div id="rightBtn" class="big-btn">▶</div>
+  </div>
+  <div class="control-block">
+    <div id="pauseBtn" class="small-btn">Pause</div>
+    <div id="restartBtn" class="small-btn">Restart</div>
+  </div>
 </div>
 
-<div id="topPanel" style="display:none;">
-  <div>Score: <span id="scoreBox">0</span></div>
-  <div>Highscore: <span id="hsBox">0</span></div>
+<!-- Menu overlay -->
+<div id="menu" class="overlay" style="z-index:50">
+  <div class="panel" id="menuPanel">
+    <h2 style="margin:0 0 8px 0">2D Shooter — Hard Bot (Option C)</h2>
+    <p style="margin:0 0 12px 0;color:var(--muted)">এই গেমে তোমার প্রতিপক্ষ একটি স্মার্ট বট — predictive-shots ও dodge আছে। মোবাইল/ডেস্কটপ দুইতেই খেলো।</p>
+    <div style="display:flex;gap:8px">
+      <button id="startBtn" class="btn">Start Game</button>
+      <button id="howBtn" class="btn ghost">How to play</button>
+    </div>
+    <hr style="opacity:0.06;margin:12px 0">
+    <div style="font-size:13px;color:var(--muted)">Features: sprite-like drawing, particles, sounds, menu, pause, responsive.</div>
+  </div>
 </div>
 
-<div id="steerWheel"><div id="wheelCenter"></div></div>
+<!-- Game Over overlay -->
+<div id="gameOver" class="overlay" style="display:none;z-index:60">
+  <div class="panel" id="overPanel">
+    <h2 id="overTitle">Game Over</h2>
+    <p id="overText" style="color:var(--muted)">...</p>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="playAgain" class="btn">Play Again</button>
+      <button id="backMenu" class="btn ghost">Back to Menu</button>
+    </div>
+  </div>
+</div>
+
+<footer>Made for GitHub Pages — local play only</footer>
 
 <script>
-/* --------------------------------------------------
-   CORE ENGINE – নতুন ভার্সন (আরও সুন্দর, স্মুথ, বাস্তবধর্মী)
------------------------------------------------------*/
+/* ========== Core setup ========== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d', {alpha:false});
+let W = innerWidth, H = innerHeight;
+function resize(){ W = innerWidth; H = innerHeight; canvas.width = W; canvas.height = H; }
+addEventListener('resize', resize); resize();
 
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-
-let W = canvas.width;
-let H = canvas.height;
-
-let car = {
-  x: W/2,
-  y: H - 150,
-  angle: 0,
-  targetAngle: 0,
-  color: "#ff2a2a"
+const hud = {
+  pHP: document.getElementById('pHP'),
+  bHP: document.getElementById('bHP'),
+  pScore: document.getElementById('pScore'),
+  bScore: document.getElementById('bScore')
 };
 
-let speed = 6;
-let score = 0;
-let highscore = localStorage.getItem("curvyHS") || 0;
+const menu = document.getElementById('menu');
+const startBtn = document.getElementById('startBtn');
+const howBtn = document.getElementById('howBtn');
+const gameOver = document.getElementById('gameOver');
+const overTitle = document.getElementById('overTitle');
+const overText = document.getElementById('overText');
+const playAgain = document.getElementById('playAgain');
+const backMenu = document.getElementById('backMenu');
 
-let obstacles = [];
+const pauseBtn = document.getElementById('pauseBtn');
+const restartBtn = document.getElementById('restartBtn');
 
-/* Curvy Road Function */
-function roadCenterAt(y) {
-  return W/2 + Math.sin(y * 0.002) * 120;
+let playing = false;
+let paused = false;
+
+/* ===== WebAudio simple SFX ===== */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function beep(freq=440, time=0.08, type='sine', vol=0.06){
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.value = vol;
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start();
+  o.stop(audioCtx.currentTime + time);
 }
+function soundShoot(){ beep(900,0.06,'square',0.04); }
+function soundHit(){ beep(220,0.10,'sawtooth',0.06); }
+function soundExplode(){ beep(120,0.26,'triangle',0.08); }
 
-/* Car Steering */
-const wheel = document.getElementById("steerWheel");
-let steering = 0;
+/* ===== Utility ===== */
+function rand(min,max){ return Math.random()*(max-min)+min; }
+function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
 
-wheel.addEventListener("pointerdown", e => wheel.setPointerCapture(e.pointerId));
-wheel.addEventListener("pointermove", e => {
-  let rect = wheel.getBoundingClientRect();
-  let dx = e.clientX - (rect.left + rect.width/2);
-  steering = dx * 0.03;
+/* ===== Game objects & state ===== */
+const state = {
+  player: { x: W/2, y: H - 120, w: 46, h:46, color:'#38c172', hp:5, score:0, dir:0, bullets:[] },
+  bot:    { x: W/2, y: 120, w: 46, h:46, color:'#e84b4b', hp:5, score:0, dir:0, bullets:[], dodgeTimer:0, lastShot:0 },
+  particles: [],
+  stars: []
+};
+
+const bulletSpeed = 6;
+const playerSpeed = 4.2;
+const botSpeed = 4.6;
+const fireCooldownP = 300; // ms
+const fireCooldownB = 380; // bot base ms
+let lastFireP = 0;
+
+/* background stars */
+for(let i=0;i<80;i++) state.stars.push({x:rand(0,W), y:rand(0,H), r:rand(0.5,2.2), vy:rand(0.1,0.6)});
+
+/* ===== Controls (touch + keyboard) ===== */
+const leftBtn = document.getElementById('leftBtn');
+const rightBtn = document.getElementById('rightBtn');
+const fireBtn = document.getElementById('fireBtn');
+
+function bindBtn(el, name){
+  let active=false;
+  const start = (e)=>{ e.preventDefault(); active=true; state.player.dir = name==='left'? -1 : (name==='right'? 1 : 0); if(name==='fire') tryPlayerFire(); };
+  const end = (e)=>{ e.preventDefault(); active=false; if(name!=='fire') state.player.dir = 0; };
+  el.addEventListener('touchstart', start); el.addEventListener('mousedown', start);
+  el.addEventListener('touchend', end); el.addEventListener('mouseup', end);
+}
+bindBtn(leftBtn,'left'); bindBtn(rightBtn,'right');
+fireBtn.addEventListener('click', ()=> tryPlayerFire());
+
+addEventListener('keydown', e=>{
+  if(e.key==='a' || e.key==='A') state.player.dir = -1;
+  if(e.key==='d' || e.key==='D') state.player.dir = 1;
+  if(e.key==='k' || e.key==='K') tryPlayerFire();
+  if(e.key==='ArrowLeft') state.player.dir = -1;
+  if(e.key==='ArrowRight') state.player.dir = 1;
+  if(e.key==='/' ) tryPlayerFire();
+  if(e.key===' '){ togglePause(); }
 });
-wheel.addEventListener("pointerup", () => steering = 0);
+addEventListener('keyup', e=>{
+  if(['a','A','d','D','ArrowLeft','ArrowRight'].includes(e.key)) state.player.dir = 0;
+});
 
-/* Draw Car */
-function drawCar() {
-  ctx.save();
-  ctx.translate(car.x, car.y);
-  ctx.rotate(car.angle);
-
-  ctx.fillStyle = car.color;
-  ctx.fillRect(-25, -50, 50, 100);
-
-  ctx.fillStyle = "#000";
-  ctx.fillRect(-28, -40, 10, 30);
-  ctx.fillRect(18, -40, 10, 30);
-  ctx.fillRect(-28, 10, 10, 30);
-  ctx.fillRect(18, 10, 10, 30);
-
-  ctx.restore();
-}
-
-/* Draw Road */
-function drawRoad() {
-  for (let y = 0; y < H; y += 10) {
-    let c = roadCenterAt(score + y);
-    ctx.fillStyle = "#333";
-    ctx.fillRect(c - 70, y, 140, 10);
-
-    ctx.fillStyle = "#777";
-    ctx.fillRect(c - 2, y, 4, 10);
+/* ===== Particle system ===== */
+function spawnParticles(x,y,color,count=18){
+  for(let i=0;i<count;i++){
+    state.particles.push({
+      x,y,vx:rand(-2.6,2.6), vy:rand(-2.6,2.6),
+      life:rand(360,740), size:rand(1,4), color, alpha:1
+    });
   }
 }
 
-/* Draw City Buildings */
-function drawBuildings() {
-  for (let y = 0; y < H; y += 40) {
-    let leftX = roadCenterAt(score + y) - 120;
-    let rightX = roadCenterAt(score + y) + 120;
-
-    ctx.fillStyle = "#444";
-    ctx.fillRect(leftX - 80, y, 70, 40);
-    ctx.fillRect(rightX + 10, y, 70, 40);
-  }
+/* ===== Shooting ===== */
+function tryPlayerFire(){
+  if(!playing || paused) return;
+  const now = performance.now();
+  if(now - lastFireP < fireCooldownP) return;
+  lastFireP = now;
+  const p = state.player;
+  p.bullets.push({x:p.x, y:p.y - p.h/2 - 8, vy:-bulletSpeed, r:6, from:'player'});
+  soundShoot();
+}
+function botFire(predX, predY){
+  const b = state.bot;
+  b.bullets.push({x:b.x, y:b.y + b.h/2 + 8, vy:bulletSpeed, r:6, from:'bot'});
+  b.lastShot = performance.now();
+  soundShoot();
 }
 
-/* Obstacles */
-function spawnObstacle() {
-  obstacles.push({
-    x: roadCenterAt(score) + (Math.random()*120 - 60),
-    y: -50
-  });
-}
-setInterval(spawnObstacle, 900);
-
-function drawObstacles() {
-  ctx.fillStyle = "#ff5555";
-  for (let ob of obstacles) {
-    ctx.fillRect(ob.x - 20, ob.y - 40, 40, 80);
-  }
+/* ===== Collision helpers ===== */
+function aabbHit(px,py,w,h, bx,by){
+  return bx > px - w/2 && bx < px + w/2 && by > py - h/2 && by < py + h/2;
 }
 
-/* Collision */
-function checkCollision() {
-  for (let ob of obstacles) {
-    if (Math.abs(ob.x - car.x) < 40 && Math.abs(ob.y - car.y) < 70) {
-      vibrate();
-      resetGame();
+/* ===== Bot AI (Hard) =====
+ - Predictive shooting: estimate player's future x based on current velocity
+ - Dodge: if a bullet is incoming toward bot, try to dodge sideways
+ - Aggressive move: align to predicted firing line
+*/
+function botAI(dt){
+  const b = state.bot;
+  const p = state.player;
+  const now = performance.now();
+  // dodge if incoming bullet heading towards bot
+  const threat = state.player.bullets.reduce((acc,bul)=>{
+    // consider bullet that is above bot and moving down
+    if(bul.vy > 0) return acc;
+    // actually player's bullets go up (vy negative) so threat only from player's? For bot, we check player's bullets that might hit bot (player shoots up)
+    return acc + 0;
+  },0);
+
+  // detect nearest player bullet headed toward bot (vy negative, y > bot.y)
+  let incoming = null;
+  for(let bl of state.player.bullets){
+    // bullet moving up (vy < 0), if its x near bot and its y < bot.y it's not threat; we need bullets moving down toward bot (bot is at top)
+    // Actually player's bullets move up; so they threaten bot when their y < bot.y (i.e., bullet above bot). But player's bullets start below and go up.
+    // So check bullets with vy < 0 and by < bot.y and horizontal closeness
+    if(bl.vy < 0 && bl.y < b.y + 30 && Math.abs(bl.x - b.x) < 80){
+      if(!incoming || (b.y - bl.y) < (b.y - incoming.y)) incoming = bl;
     }
   }
-}
 
-function vibrate() {
-  if (navigator.vibrate) navigator.vibrate(100);
-}
-
-/* Reset */
-function resetGame() {
-  if (score > highscore) {
-    highscore = score;
-    localStorage.setItem("curvyHS", highscore);
+  // DODGE logic: if incoming bullet close, move sideways opposite
+  if(incoming && Math.random() < 0.95){
+    // choose side further from player's x or screen edge
+    const prefer = (incoming.x < b.x) ? 1 : -1; // if bullet left, move right
+    b.dir = prefer;
+    b.dodgeTimer = 260 + Math.random()*300;
+  } else {
+    // normal strategic movement: attempt to align with predicted shot point
+    // Predict player's future x: simple linear prediction using player's dir and speed
+    const predictedX = p.x + (p.dir * playerSpeed * 14) + ( (Math.random()-0.5)*20 ); // anticipate small randomness
+    // move towards predictedX but with some jitter
+    const dx = predictedX - b.x;
+    if(Math.abs(dx) > 8){
+      b.dir = dx > 0 ? 1 : -1;
+    } else b.dir = 0;
+    // occasional random strafe
+    if(Math.random() < 0.007) b.dir = (Math.random()<0.5)? -1:1;
   }
-  score = 0;
-  obstacles = [];
+
+  // Fire control: predictive aim - estimate where player will be when bullet reaches
+  if(now - b.lastShot > fireCooldownB){
+    // predict time to travel
+    const distY = p.y - b.y;
+    const travelTime = Math.abs(distY) / bulletSpeed;
+    // predicted player x
+    const predX = p.x + p.dir * playerSpeed * travelTime * 12; // multiplier to tune
+    // only fire if aligned enough or sometimes aggressive
+    if(Math.abs(predX - b.x) < 120 || Math.random() < 0.22){
+      // small chance to wait a little
+      botFire(predX, p.y);
+    }
+  }
+
+  // apply dodge timer
+  if(b.dodgeTimer > 0){
+    b.dodgeTimer -= dt;
+    if(b.dodgeTimer <= 0) b.dodgeTimer = 0;
+  }
 }
 
-/* GAME LOOP */
-function loop() {
-  ctx.clearRect(0,0,W,H);
+/* ===== Update loop ===== */
+let last = performance.now();
+function update(ts){
+  if(!playing || paused) { last = ts; return; }
+  const dt = ts - last;
+  last = ts;
 
-  drawBuildings();
-  drawRoad();
-  drawObstacles();
-  drawCar();
+  // background stars move
+  for(let s of state.stars){ s.y += s.vy; if(s.y > H) { s.y = -10; s.x = rand(0,W); } }
 
-  car.angle += (steering - car.angle) * 0.1;
-  car.x += car.angle * 4;
+  // player movement
+  const p = state.player;
+  p.x += p.dir * playerSpeed;
+  p.x = clamp(p.x, p.w/2, W - p.w/2);
 
-  for (let ob of obstacles) ob.y += speed;
+  // bot movement
+  const b = state.bot;
+  // apply AI
+  botAI(dt);
+  b.x += b.dir * botSpeed;
+  b.x = clamp(b.x, b.w/2, W - b.w/2);
 
-  score++;
-  document.getElementById("scoreBox").innerText = score;
-  document.getElementById("hsBox").innerText = highscore;
+  // bullets update
+  for(let obj of [p,b]){
+    for(let bl of obj.bullets) bl.y += bl.vy;
+    // remove offscreen
+    obj.bullets = obj.bullets.filter(bl => bl.y > -30 && bl.y < H + 30);
+  }
 
-  checkCollision();
+  // collision: player's bullets hit bot
+  for(let bl of p.bullets){
+    if(aabbHit(b.x,b.y,b.w,b.h, bl.x, bl.y)){
+      // hit
+      bl.hit = true;
+      b.hp -= 1;
+      p.score += 1;
+      spawnParticles(bl.x, bl.y, '#ffd479', 16);
+      soundHit();
+    }
+  }
+  p.bullets = p.bullets.filter(bl => !bl.hit);
+
+  // collision: bot's bullets hit player
+  for(let bl of b.bullets){
+    if(aabbHit(p.x,p.y,p.w,p.h, bl.x, bl.y)){
+      bl.hit = true;
+      p.hp -= 1;
+      b.score += 1;
+      spawnParticles(bl.x, bl.y, '#ff8b8b', 18);
+      soundHit();
+    }
+  }
+  b.bullets = b.bullets.filter(bl => !bl.hit);
+
+  // particles update
+  for(let pt of state.particles){
+    pt.x += pt.vx; pt.y += pt.vy; pt.life -= dt; pt.alpha = Math.max(0, pt.life/800);
+  }
+  state.particles = state.particles.filter(pt => pt.life > 0);
+
+  // HUD update
+  hud.pHP.textContent = p.hp;
+  hud.bHP.textContent = b.hp;
+  hud.pScore.textContent = p.score;
+  hud.bScore.textContent = b.score;
+
+  // death check
+  if(p.hp <= 0 || b.hp <= 0){
+    playing = false;
+    gameOver.style.display = 'flex';
+    overTitle.textContent = (p.hp<=0)? 'You Lost!' : 'You Win!';
+    overText.textContent = `Final Score — You: ${p.score} | Bot: ${b.score}`;
+    soundExplode();
+  }
+}
+
+/* ===== Render ===== */
+function drawRoundedRect(x,y,w,h,r,color){
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x-r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath(); ctx.fill();
+}
+function drawSprite(x,y,w,h,color,isPlayer){
+  // simple "sprite" - body + eyes + shadow
+  // body
+  const grad = ctx.createLinearGradient(x - w/2, y - h/2, x + w/2, y + h/2);
+  grad.addColorStop(0, shade(color, 0.08));
+  grad.addColorStop(1, shade(color, -0.12));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(x, y, w/2, h/2, 0, 0, Math.PI*2);
+  ctx.fill();
+  // face / mark
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.fillRect(x - w*0.33, y - h*0.13, w*0.66, h*0.28);
+  // eyes
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(x - w*0.18, y - 2, 4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.18, y - 2, 4, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = isPlayer ? '#000' : '#000';
+  ctx.beginPath(); ctx.arc(x - w*0.18, y - 2, 1.7, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.18, y - 2, 1.7, 0, Math.PI*2); ctx.fill();
+}
+function shade(hex, percent){
+  // hex like #rrggbb
+  const f = parseInt(hex.slice(1),16);
+  const t = percent<0?0:255;
+  const p = Math.abs(percent);
+  let R = f>>16, G = f>>8 & 0xFF, B = f & 0xFF;
+  R = Math.round((t-R)*p)+R; G = Math.round((t-G)*p)+G; B = Math.round((t-B)*p)+B;
+  return `rgb(${R},${G},${B})`;
+}
+
+function render(){
+  // background
+  ctx.fillStyle = '#031824';
+  ctx.fillRect(0,0,W,H);
+  // moving gradient
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0, 'rgba(10,18,26,0.6)');
+  g.addColorStop(1, 'rgba(3,10,14,0.9)');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+  // stars
+  for(let s of state.stars){
+    ctx.globalAlpha = 0.9; ctx.fillStyle = '#c8e6ff';
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // draw arena line separation hint
+  ctx.fillStyle = 'rgba(255,255,255,0.02)';
+  ctx.fillRect(0, H*0.48, W, 3);
+
+  // draw players
+  drawSprite(state.player.x, state.player.y, state.player.w, state.player.h, state.player.color, true);
+  drawSprite(state.bot.x, state.bot.y, state.bot.w, state.bot.h, state.bot.color, false);
+
+  // draw bullets
+  for(let bl of state.player.bullets){
+    ctx.beginPath(); ctx.arc(bl.x,bl.y, bl.r, 0, Math.PI*2); ctx.fillStyle = '#fff1c6'; ctx.fill();
+    // tail
+    ctx.fillStyle = 'rgba(255,210,120,0.12)';
+    ctx.fillRect(bl.x-2, bl.y+4, 4, 8);
+  }
+  for(let bl of state.bot.bullets){
+    ctx.beginPath(); ctx.arc(bl.x,bl.y, bl.r, 0, Math.PI*2); ctx.fillStyle = '#ffd6d6'; ctx.fill();
+    ctx.fillStyle = 'rgba(255,130,130,0.12)';
+    ctx.fillRect(bl.x-2, bl.y-10, 4, 8);
+  }
+
+  // particles
+  for(let pt of state.particles){
+    ctx.globalAlpha = pt.alpha;
+    ctx.fillStyle = pt.color;
+    ctx.fillRect(pt.x, pt.y, pt.size, pt.size);
+  }
+  ctx.globalAlpha = 1;
+
+  // HUD bars
+  const pad = 8;
+  // player HP bar
+  drawBar(12, H-56, 140, 10, state.player.hp/5, '#38c172');
+  drawBar(12, 12, 140, 10, state.bot.hp/5, '#e84b4b');
+
+  // small labels
+  ctx.fillStyle = '#bcd';
+  ctx.font = '13px system-ui';
+  ctx.fillText(`You — HP ${state.player.hp}`, 12, H-62);
+  ctx.fillText(`Bot — HP ${state.bot.hp}`, 12, 36);
+
+  // center little scores
+  ctx.fillStyle = '#9fb';
+  ctx.font = '14px system-ui';
+  ctx.fillText(`Score — You: ${state.player.score}  |  Bot: ${state.bot.score}`, W/2 - 100, 28);
+}
+function drawBar(x,y,w,h,ratio,color){
+  ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(x,y,w,h);
+  ctx.fillStyle = color; ctx.fillRect(x,y, w * clamp(ratio,0,1), h);
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.strokeRect(x,y,w,h);
+}
+
+/* ===== Game loop ===== */
+function loop(ts){
   requestAnimationFrame(loop);
+  update(ts);
+  render();
+}
+requestAnimationFrame(loop);
+
+/* ===== Game control functions ===== */
+function resetState(){
+  state.player.x = W/2; state.player.y = H - 120; state.player.hp = 5; state.player.score = 0; state.player.bullets = []; state.player.dir = 0;
+  state.bot.x = W/2; state.bot.y = 120; state.bot.hp = 5; state.bot.score = 0; state.bot.bullets = []; state.bot.dir = 0; state.bot.dodgeTimer = 0; state.bot.lastShot = 0;
+  state.particles = []; state.stars = [];
+  for(let i=0;i<80;i++) state.stars.push({x:rand(0,W), y:rand(0,H), r:rand(0.5,2.2), vy:rand(0.1,0.6)});
+  hud.pHP.textContent = state.player.hp; hud.bHP.textContent = state.bot.hp; hud.pScore.textContent = 0; hud.bScore.textContent = 0;
 }
 
-/* START GAME */
-document.getElementById("startBtn").onclick = () => {
-  car.color = document.getElementById("carColor").value;
+function startGame(){
+  // resume audio context if needed
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  resetState();
+  playing = true; paused = false;
+  menu.style.display = 'none';
+  gameOver.style.display = 'none';
+  last = performance.now();
+}
 
-  document.getElementById("menu").style.display = "none";
-  document.getElementById("topPanel").style.display = "flex";
+function togglePause(){
+  if(!playing) return;
+  paused = !paused;
+  pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+}
 
-  loop();
-};
+/* ===== Buttons binding ===== */
+startBtn.addEventListener('click', startGame);
+howBtn.addEventListener('click', ()=> alert('Move: A/D or Arrow keys or touch left/right. Shoot: K or / or FIRE button. Space to pause.'));
+playAgain.addEventListener('click', ()=> { startGame(); });
+backMenu.addEventListener('click', ()=> { menu.style.display='flex'; gameOver.style.display='none'; });
+
+pauseBtn.addEventListener('click', ()=> togglePause());
+restartBtn.addEventListener('click', ()=> { startGame(); });
+
+/* ===== Utilities for responsive tuning ===== */
+// ensure player & bot reposition on resize to remain in bounds
+addEventListener('resize', ()=> {
+  state.player.x = clamp(state.player.x, state.player.w/2, W-state.player.w/2);
+  state.bot.x = clamp(state.bot.x, state.bot.w/2, W-state.bot.w/2);
+});
+
+/* ===== Start with menu visible ===== */
+menu.style.display = 'flex';
+
+/* ===== Extra tweak: slight touch to make bot dodge bullets more often using distance checks ===== */
+/* (Already handled inside botAI via incoming detection & dodgeTimer) */
+
 </script>
 </body>
 </html>
